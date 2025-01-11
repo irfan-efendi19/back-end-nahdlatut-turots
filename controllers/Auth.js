@@ -26,15 +26,15 @@ const Login = async (req, res) => {
     }
 
     const userId = user.id;
-    const nama = user.nama;
+    const name = user.name;
     const email = user.email;
     const accessToken = jwt.sign(
-      { userId, nama, email },
+      { userId, name, email },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "20s" }
     );
     const refreshToken = jwt.sign(
-      { userId, nama, email },
+      { userId, name, email },
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "1d" }
     );
@@ -128,10 +128,10 @@ const refreshToken = async (req, res) => {
 const register = async (req, res) => {
   try {
     console.log("Request Body:", req.body);
-    const { email, password, nama } = req.body;
+    const { email, password, name } = req.body;
 
     // Check if the request body contains the necessary fields
-    if (!email || !password || !nama) {
+    if (!email || !password || !name) {
       return res.status(400).json({
         status: "fail",
         message: "Mohon lengkapi semua field",
@@ -159,14 +159,14 @@ const register = async (req, res) => {
     const newUser = await User.create({
       email: email,
       password: hashedPassword,
-      nama: nama,
+      name: name,
     });
 
     // Create a token for the new user
     const userId = newUser.id;
     const uniqueTokenData = `${userId}-${Date.now()}`;
     const accessToken = jwt.sign(
-      { userId, nama, email },
+      { userId, name, email },
       process.env.ACCESS_TOKEN_SECRET,
       {
         expiresIn: "20s",
@@ -190,7 +190,7 @@ const register = async (req, res) => {
       user: {
         id: newUser.id,
         email: newUser.email,
-        nama: newUser.nama,
+        name: newUser.name,
       },
       accessToken: accessToken,
     });
