@@ -25,12 +25,16 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true,
       },
+      pages: {
+        type: Sequelize.INTEGER,
+        allowNull: true, // Jumlah halaman bersifat opsional
+      },
       pdf_url: {
         type: Sequelize.STRING,
         allowNull: true,
       },
       thumbnail_url: {
-        type: Sequelize.STRING, 
+        type: Sequelize.STRING,
         allowNull: true,
       },
       created_at: {
