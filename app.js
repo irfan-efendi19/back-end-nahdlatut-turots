@@ -12,9 +12,9 @@ const booksRouter = require("./routes/books");
 
 const app = express();
 
-var whitelisted = process.env.WHITELISTED.split(";");
+// var whitelisted = process.env.WHITELISTED.split(";");
 
-let whitelist = whitelisted;
+// let whitelist = whitelisted;
 
 app.use(express.json());
 
