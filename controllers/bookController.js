@@ -13,6 +13,7 @@ const bookSchema = {
   publishedYear: { type: "number", positive: true, integer: true },
   genre: { type: "string", optional: true },
   pages: { type: "number", positive: true, integer: true, optional: true },
+  description: { type: "string", optional: true, max: 1000 }, // Parameter deskripsi
 };
 
 // Helper function: Upload file to Google Cloud Storage
@@ -66,7 +67,7 @@ const addBook = async (req, res) => {
       return res.status(400).json({ message: "Validation failed", errors: validation });
     }
 
-    const { title, author, publishedYear, genre, pages } = req.body;
+    const { title, author, publishedYear, genre, pages, description } = req.body;
 
     // Ambil file dari request
     const pdfFile = req.files?.pdf?.[0];
@@ -89,6 +90,7 @@ const addBook = async (req, res) => {
       publishedYear,
       genre,
       pages,
+      description, // Simpan deskripsi
       pdf_url: pdfUrl,
       thumbnail_url: thumbnailUrl,
     });

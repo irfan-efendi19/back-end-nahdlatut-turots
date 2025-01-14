@@ -27,7 +27,11 @@ module.exports = {
       },
       pages: {
         type: Sequelize.INTEGER,
-        allowNull: true, // Jumlah halaman bersifat opsional
+        allowNull: true, 
+      },
+      description: {
+        type: Sequelize.STRING(9000), 
+        allowNull: true, 
       },
       pdf_url: {
         type: Sequelize.STRING,

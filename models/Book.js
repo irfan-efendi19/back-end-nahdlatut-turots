@@ -1,5 +1,3 @@
-"use strict";
-
 module.exports = (sequelize, DataTypes) => {
   const Book = sequelize.define(
     "Book",
@@ -26,12 +24,20 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      pages: {
+        type: DataTypes.INTEGER, 
+        allowNull: true, 
+      },
+      description: {
+        type: DataTypes.STRING(9000), 
+        allowNull: true, 
+      },
       pdf_url: {
-        type: DataTypes.STRING, // Untuk menyimpan URL file PDF
+        type: DataTypes.STRING, 
         allowNull: true,
       },
       thumbnail_url: {
-        type: DataTypes.STRING, // Untuk menyimpan URL thumbnail
+        type: DataTypes.STRING, 
         allowNull: true,
       },
     },
