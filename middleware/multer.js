@@ -1,6 +1,4 @@
 const multer = require("multer");
-
-// Konfigurasi penyimpanan di memori
 const storage = multer.memoryStorage();
 
 // Validasi jenis file

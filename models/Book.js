@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       published_year: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       genre: {
         type: DataTypes.STRING,

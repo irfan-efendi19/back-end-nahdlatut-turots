@@ -10,22 +10,24 @@ const v = new Validator();
 const bookSchema = {
   title: { type: "string", min: 3, max: 255, empty: false },
   author: { type: "string", min: 3, max: 255, empty: false },
-  publishedYear: { type: "number", positive: true, integer: true },
+  published_year: { type: "integer", positive: true, optional: true }, 
   genre: { type: "string", optional: true },
-  pages: { type: "number", positive: true, integer: true, optional: true },
-  description: { type: "string", optional: true, max: 1000 }, // Parameter deskripsi
-};
+  pages: { type: "integer", positive: true, optional: true },  
+  description: { type: "string", optional: true, max: 1000 }, 
+}
+
 
 // Helper function: Upload file to Google Cloud Storage
 const uploadFileToBucket = async (file, folder) => {
   const bucket = storage.bucket(bucketName);
-  const blob = bucket.file(`${folder}/${Date.now()}-${file.originalname}`);
+  const fileName = `${folder}/${Date.now()}-${encodeURIComponent(file.originalname)}`;
+  const blob = bucket.file(fileName);
   const blobStream = blob.createWriteStream();
 
   return new Promise((resolve, reject) => {
     blobStream
       .on("finish", () => {
-        const publicUrl = `https://storage.googleapis.com/${bucketName}/${blob.name}`;
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
         resolve(publicUrl);
       })
       .on("error", (err) => {
@@ -34,6 +36,7 @@ const uploadFileToBucket = async (file, folder) => {
       .end(file.buffer);
   });
 };
+
 
 // GET /books - Fetch all books
 const getAllBooks = async (req, res) => {
@@ -67,7 +70,7 @@ const addBook = async (req, res) => {
       return res.status(400).json({ message: "Validation failed", errors: validation });
     }
 
-    const { title, author, publishedYear, genre, pages, description } = req.body;
+    const { title, author, published_year, genre, pages, description } = req.body;
 
     // Ambil file dari request
     const pdfFile = req.files?.pdf?.[0];
@@ -87,10 +90,10 @@ const addBook = async (req, res) => {
     const newBook = await Book.create({
       title,
       author,
-      publishedYear,
+      published_year,
       genre,
       pages,
-      description, // Simpan deskripsi
+      description, 
       pdf_url: pdfUrl,
       thumbnail_url: thumbnailUrl,
     });
@@ -129,4 +132,60 @@ const deleteBook = async (req, res) => {
   }
 };
 
-module.exports = { getAllBooks, getBookById, addBook, deleteBook };
+const updateBook = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const book = await Book.findByPk(id);
+
+    if (!book) {
+      return res.status(404).json({ message: "Book not found" });
+    }
+
+    const validation = v.validate(req.body, bookSchema);
+    if (validation !== true) {
+      return res.status(400).json({ message: "Validation failed", errors: validation });
+    }
+
+    const { title, author, published_year, genre, pages, description } = req.body;
+
+    const pdfFile = req.files?.pdf?.[0];
+    const thumbnailFile = req.files?.thumbnail?.[0];
+
+    let pdfUrl = book.pdf_url;
+    let thumbnailUrl = book.thumbnail_url;
+
+    if (pdfFile) {
+      const oldPdfPath = pdfUrl?.split(`${bucketName}/`)[1];
+      if (oldPdfPath) {
+        await storage.bucket(bucketName).file(oldPdfPath).delete().catch(() => {});
+      }
+      pdfUrl = await uploadFileToBucket(pdfFile, "pdfs");
+    }
+
+    if (thumbnailFile) {
+      const oldThumbnailPath = thumbnailUrl?.split(`${bucketName}/`)[1];
+      if (oldThumbnailPath) {
+        await storage.bucket(bucketName).file(oldThumbnailPath).delete().catch(() => {});
+      }
+      thumbnailUrl = await uploadFileToBucket(thumbnailFile, "thumbnails");
+    }
+
+    await book.update({
+      title: title || book.title,
+      author: author || book.author,
+      published_year: published_year || book.published_year,
+      genre: genre || book.genre,
+      pages: pages || book.pages,
+      description: description || book.description,
+      pdf_url: pdfUrl,
+      thumbnail_url: thumbnailUrl,
+    });
+
+    res.status(200).json({ message: "Book updated successfully", book });
+  } catch (err) {
+    res.status(500).json({ message: "Error updating book", error: err.message });
+  }
+};
+
+
+module.exports = { getAllBooks, getBookById, addBook, deleteBook, updateBook};
