@@ -6,11 +6,15 @@ const {
   getBookById, 
   addBook, 
   deleteBook, 
-  updateBook // Impor fitur updateBook
+  updateBook, // Impor fitur updateBook
+  searchBooks // Impor fitur pencarian
 } = require("../controllers/bookController");
 
 // GET /books - Fetch all books
 router.get("/", getAllBooks);
+
+// GET /books/search - Search books by keyword
+router.get("/search", searchBooks);
 
 // GET /books/:id - Fetch book by ID
 router.get("/:id", getBookById);

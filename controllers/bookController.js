@@ -2,6 +2,8 @@ const { Book } = require('../models');
 const { Storage } = require('@google-cloud/storage');
 const Validator = require('fastest-validator');
 
+const { Op } = require("sequelize"); // Import operator untuk pencarian
+
 const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET;
 const v = new Validator();
@@ -10,9 +12,9 @@ const v = new Validator();
 const bookSchema = {
   title: { type: "string", min: 3, max: 255, empty: false },
   author: { type: "string", min: 3, max: 255, empty: false },
-  published_year: { type: "integer", positive: true, optional: true }, 
+  published_year: { type: "string", positive: true, optional: true }, 
   genre: { type: "string", optional: true },
-  pages: { type: "integer", positive: true, optional: true },  
+  pages: { type: "string", positive: true, optional: true },  
   description: { type: "string", optional: true, max: 1000 }, 
 }
 
@@ -187,5 +189,35 @@ const updateBook = async (req, res) => {
   }
 };
 
+// GET /books/search - Search books by keyword
+const searchBooks = async (req, res) => {
+  try {
+    const { q } = req.query; // Ambil query parameter `q`
+    if (!q) {
+      return res.status(400).json({ message: "Query parameter 'q' is required" });
+    }
 
-module.exports = { getAllBooks, getBookById, addBook, deleteBook, updateBook};
+    // Cari kitab berdasarkan kata kunci pada kolom `title`, `author`, atau `description`
+    const books = await Book.findAll({
+      where: {
+        [Op.or]: [
+          { title: { [Op.like]: `%${q}%` } },
+          { author: { [Op.like]: `%${q}%` } },
+          { description: { [Op.like]: `%${q}%` } },
+        ],
+      },
+    });
+
+    // Jika tidak ada hasil, kembalikan pesan
+    if (books.length === 0) {
+      return res.status(404).json({ message: "No books found matching the query" });
+    }
+
+    res.status(200).json(books);
+  } catch (err) {
+    res.status(500).json({ message: "Error searching books", error: err.message });
+  }
+};
+
+
+module.exports = { getAllBooks, getBookById, addBook, deleteBook, updateBook, searchBooks};
