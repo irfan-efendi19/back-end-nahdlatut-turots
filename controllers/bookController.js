@@ -21,23 +21,42 @@ const bookSchema = {
 
 // Helper function: Upload file to Google Cloud Storage
 const uploadFileToBucket = async (file, folder) => {
-  const bucket = storage.bucket(bucketName);
-  const fileName = `${folder}/${Date.now()}-${encodeURIComponent(file.originalname)}`;
-  const blob = bucket.file(fileName);
-  const blobStream = blob.createWriteStream();
+  try {
+    // Pastikan bucket sudah diinisialisasi
+    const bucket = storage.bucket(bucketName);
 
-  return new Promise((resolve, reject) => {
-    blobStream
-      .on("finish", () => {
-        const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
-        resolve(publicUrl);
-      })
-      .on("error", (err) => {
-        reject(new Error(`Error uploading file to Google Cloud: ${err.message}`));
-      })
-      .end(file.buffer);
-  });
+    // Encode nama file untuk menghindari karakter khusus yang menyebabkan masalah
+    const encodedFileName = encodeURIComponent(file.originalname).replace(/%20/g, "+"); // Mengganti %20 dengan "+" untuk kompatibilitas
+    const fileName = `${folder}/${Date.now()}-${encodedFileName}`;
+    const blob = bucket.file(fileName);
+
+    // Membuat stream untuk mengunggah file
+    const blobStream = blob.createWriteStream({
+      resumable: false, // Optional: set to false jika tidak menggunakan upload yang dapat dilanjutkan
+      gzip: true, // Optional: kompresi file secara otomatis
+      metadata: {
+        contentType: file.mimetype, // Tetapkan tipe konten file
+      },
+    });
+
+    // Return promise untuk menyelesaikan upload
+    return new Promise((resolve, reject) => {
+      blobStream
+        .on("finish", () => {
+          // URL publik setelah file berhasil diunggah
+          const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+          resolve(publicUrl);
+        })
+        .on("error", (err) => {
+          reject(new Error(`Error uploading file to Google Cloud: ${err.message}`));
+        })
+        .end(file.buffer);
+    });
+  } catch (error) {
+    throw new Error(`Unexpected error during file upload: ${error.message}`);
+  }
 };
+
 
 
 // GET /books - Fetch all books
@@ -78,12 +97,14 @@ const addBook = async (req, res) => {
     const pdfFile = req.files?.pdf?.[0];
     const thumbnailFile = req.files?.thumbnail?.[0];
 
-    if (!pdfFile) {
-      return res.status(400).json({ message: "PDF file is required" });
-    }
+    // if (!pdfFile) {
+    //   return res.status(400).json({ message: "PDF file is required" });
+    // }
 
     // Upload file ke Google Cloud Storage
-    const pdfUrl = await uploadFileToBucket(pdfFile, "pdfs");
+    const pdfUrl = pdfFile
+    ? await uploadFileToBucket(thumbnaipdfFilelFile, "pdfs")
+    : null;
     const thumbnailUrl = thumbnailFile
       ? await uploadFileToBucket(thumbnailFile, "thumbnails")
       : null;

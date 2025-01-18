@@ -19,14 +19,14 @@ module.exports = {
       },
       published_year: {
         allowNull: true,
-        type: Sequelize.INTEGER,
+        type: Sequelize.STRING,
       },
       genre: {
         type: Sequelize.STRING,
         allowNull: true,
       },
       pages: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.STRING,
         allowNull: true, 
       },
       description: {
