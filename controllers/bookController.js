@@ -22,7 +22,6 @@ const bookSchema = {
 // Helper function: Upload file to Google Cloud Storage
 const uploadFileToBucket = async (file, folder) => {
   try {
-    // Pastikan bucket sudah diinisialisasi
     const bucket = storage.bucket(bucketName);
 
     // Encode nama file untuk menghindari karakter khusus yang menyebabkan masalah
@@ -32,10 +31,10 @@ const uploadFileToBucket = async (file, folder) => {
 
     // Membuat stream untuk mengunggah file
     const blobStream = blob.createWriteStream({
-      resumable: false, // Optional: set to false jika tidak menggunakan upload yang dapat dilanjutkan
-      gzip: true, // Optional: kompresi file secara otomatis
+      resumable: false, 
+      gzip: true, 
       metadata: {
-        contentType: file.mimetype, // Tetapkan tipe konten file
+        contentType: file.mimetype, 
       },
     });
 
@@ -62,12 +61,28 @@ const uploadFileToBucket = async (file, folder) => {
 // GET /books - Fetch all books
 const getAllBooks = async (req, res) => {
   try {
-    const books = await Book.findAll();
+    const { genre } = req.query; 
+
+    let books;
+    if (genre) {
+      books = await Book.findAll({
+        where: {
+          genre: genre,
+        },
+      });
+    } else {
+      books = await Book.findAll();
+    }
+    if (books.length === 0) {
+      return res.status(404).json({ message: "Tidak menemukan kitab" });
+    }
+
     res.status(200).json(books);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching books", error: err.message });
+    res.status(500).json({ message: "Kesalahan mengambil kitab", error: err.message });
   }
 };
+
 
 // GET /books/:id - Fetch book by ID
 const getBookById = async (req, res) => {
@@ -97,14 +112,10 @@ const addBook = async (req, res) => {
     const pdfFile = req.files?.pdf?.[0];
     const thumbnailFile = req.files?.thumbnail?.[0];
 
-    // if (!pdfFile) {
-    //   return res.status(400).json({ message: "PDF file is required" });
-    // }
-
     // Upload file ke Google Cloud Storage
     const pdfUrl = pdfFile
-    ? await uploadFileToBucket(thumbnaipdfFilelFile, "pdfs")
-    : null;
+      ? await uploadFileToBucket(pdfFile, "pdfs") // Corrected here
+      : null;
     const thumbnailUrl = thumbnailFile
       ? await uploadFileToBucket(thumbnailFile, "thumbnails")
       : null;
@@ -116,7 +127,7 @@ const addBook = async (req, res) => {
       published_year,
       genre,
       pages,
-      description, 
+      description,
       pdf_url: pdfUrl,
       thumbnail_url: thumbnailUrl,
     });
@@ -126,6 +137,7 @@ const addBook = async (req, res) => {
     res.status(500).json({ message: "Error adding book", error: err.message });
   }
 };
+
 
 // DELETE /books/:id - Delete book by ID
 const deleteBook = async (req, res) => {
