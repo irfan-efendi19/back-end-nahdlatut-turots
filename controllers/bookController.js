@@ -2,7 +2,7 @@ const { Book } = require('../models');
 const { Storage } = require('@google-cloud/storage');
 const Validator = require('fastest-validator');
 
-const { Op } = require("sequelize"); // Import operator untuk pencarian
+const { Op } = require("sequelize"); 
 
 const storage = new Storage();
 const bucketName = process.env.GCS_BUCKET;
@@ -42,7 +42,6 @@ const uploadFileToBucket = async (file, folder) => {
     return new Promise((resolve, reject) => {
       blobStream
         .on("finish", () => {
-          // URL publik setelah file berhasil diunggah
           const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
           resolve(publicUrl);
         })
@@ -108,19 +107,16 @@ const addBook = async (req, res) => {
 
     const { title, author, published_year, genre, pages, description } = req.body;
 
-    // Ambil file dari request
     const pdfFile = req.files?.pdf?.[0];
     const thumbnailFile = req.files?.thumbnail?.[0];
 
-    // Upload file ke Google Cloud Storage
     const pdfUrl = pdfFile
-      ? await uploadFileToBucket(pdfFile, "pdfs") // Corrected here
+      ? await uploadFileToBucket(pdfFile, "pdfs") 
       : null;
     const thumbnailUrl = thumbnailFile
       ? await uploadFileToBucket(thumbnailFile, "thumbnails")
       : null;
 
-    // Simpan buku ke database
     const newBook = await Book.create({
       title,
       author,
@@ -147,25 +143,41 @@ const deleteBook = async (req, res) => {
       return res.status(404).json({ message: "Book not found" });
     }
 
-    // Hapus file dari Google Cloud Storage jika ada
     const deletePromises = [];
+
     if (book.pdf_url) {
-      const pdfPath = book.pdf_url.split(`${bucketName}/`)[1];
-      deletePromises.push(storage.bucket(bucketName).file(pdfPath).delete());
+      const pdfPath = book.pdf_url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
+      if (pdfPath) {
+        deletePromises.push(
+          storage.bucket(bucketName).file(pdfPath).delete().catch((err) => {
+            console.error(`Failed to delete PDF: ${err.message}`);
+          })
+        );
+      }
     }
+
     if (book.thumbnail_url) {
-      const thumbnailPath = book.thumbnail_url.split(`${bucketName}/`)[1];
-      deletePromises.push(storage.bucket(bucketName).file(thumbnailPath).delete());
+      const thumbnailPath = book.thumbnail_url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
+      if (thumbnailPath) {
+        deletePromises.push(
+          storage.bucket(bucketName).file(thumbnailPath).delete().catch((err) => {
+            console.error(`Failed to delete thumbnail: ${err.message}`);
+          })
+        );
+      }
     }
+
     await Promise.all(deletePromises);
 
-    // Hapus buku dari database
+    // Hapus buku dari database setelah file berhasil dihapus
     await book.destroy();
+
     res.status(200).json({ message: "Book deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Error deleting book", error: err.message });
   }
 };
+
 
 const updateBook = async (req, res) => {
   try {
@@ -182,28 +194,32 @@ const updateBook = async (req, res) => {
     }
 
     const { title, author, published_year, genre, pages, description } = req.body;
-
     const pdfFile = req.files?.pdf?.[0];
     const thumbnailFile = req.files?.thumbnail?.[0];
 
     let pdfUrl = book.pdf_url;
     let thumbnailUrl = book.thumbnail_url;
 
+    const deletePromises = [];
+
     if (pdfFile) {
-      const oldPdfPath = pdfUrl?.split(`${bucketName}/`)[1];
-      if (oldPdfPath) {
-        await storage.bucket(bucketName).file(oldPdfPath).delete().catch(() => {});
+      if (pdfUrl) {
+        const oldPdfPath = pdfUrl.replace(`https://storage.googleapis.com/${bucketName}/`, '');
+        deletePromises.push(storage.bucket(bucketName).file(oldPdfPath).delete().catch(err => console.error("Failed to delete old PDF:", err.message)));
       }
       pdfUrl = await uploadFileToBucket(pdfFile, "pdfs");
     }
 
     if (thumbnailFile) {
-      const oldThumbnailPath = thumbnailUrl?.split(`${bucketName}/`)[1];
-      if (oldThumbnailPath) {
-        await storage.bucket(bucketName).file(oldThumbnailPath).delete().catch(() => {});
+      if (thumbnailUrl) {
+        const oldThumbnailPath = thumbnailUrl.replace(`https://storage.googleapis.com/${bucketName}/`, '');
+        deletePromises.push(storage.bucket(bucketName).file(oldThumbnailPath).delete().catch(err => console.error("Failed to delete old Thumbnail:", err.message)));
       }
       thumbnailUrl = await uploadFileToBucket(thumbnailFile, "thumbnails");
     }
+
+    // Tunggu semua file lama terhapus sebelum update database
+    await Promise.all(deletePromises);
 
     await book.update({
       title: title || book.title,
@@ -222,35 +238,59 @@ const updateBook = async (req, res) => {
   }
 };
 
+
 // GET /books/search - Search books by keyword
-const searchBooks = async (req, res) => {
+async function searchBooks() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) {
+    loadBooks();
+    return;
+  }
+
   try {
-    const { q } = req.query; // Ambil query parameter `q`
-    if (!q) {
-      return res.status(400).json({ message: "Query parameter 'q' is required" });
+    const response = await fetch(`/books/search?q=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error('Failed to search for books');
+
+    // Check if the response is JSON
+    const contentType = response.headers.get('Content-Type');
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Expected JSON response, but received: ' + contentType);
     }
 
-    // Cari kitab berdasarkan kata kunci pada kolom `title`, `author`, atau `description`
-    const books = await Book.findAll({
-      where: {
-        [Op.or]: [
-          { title: { [Op.like]: `%${q}%` } },
-          { author: { [Op.like]: `%${q}%` } },
-          { description: { [Op.like]: `%${q}%` } },
-        ],
-      },
+    const books = await response.json();
+    renderBooksTable(books);
+  } catch (error) {
+    showToast('Error', 'Error searching books: ' + error.message, 'danger');
+  }
+}
+
+
+// Tambahkan fungsi ini untuk mendapatkan statistik jumlah kitab
+const getBookStats = async (req, res) => {
+  try {
+    // Hitung total jumlah kitab
+    const totalBooks = await Book.count();
+
+    // Hitung jumlah kitab berdasarkan genre
+    const booksByGenre = await Book.findAll({
+      attributes: ['genre', [Sequelize.fn('COUNT', Sequelize.col('genre')), 'count']],
+      group: ['genre'],
     });
 
-    // Jika tidak ada hasil, kembalikan pesan
-    if (books.length === 0) {
-      return res.status(404).json({ message: "No books found matching the query" });
-    }
+    // Format hasil untuk dikembalikan dalam response
+    const genreStats = booksByGenre.map(book => ({
+      genre: book.genre || 'Unknown',
+      count: book.dataValues.count
+    }));
 
-    res.status(200).json(books);
+    res.status(200).json({
+      totalBooks,
+      booksByGenre: genreStats
+    });
   } catch (err) {
-    res.status(500).json({ message: "Error searching books", error: err.message });
+    res.status(500).json({ message: "Error fetching book statistics", error: err.message });
   }
 };
 
 
-module.exports = { getAllBooks, getBookById, addBook, deleteBook, updateBook, searchBooks};
+module.exports = { getAllBooks, getBookById, addBook, deleteBook, updateBook, searchBooks, getBookStats };

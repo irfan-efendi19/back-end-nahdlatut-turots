@@ -20,7 +20,7 @@ if (config.use_env_variable) {
   );
 }
 
-// Membaca semua file model di folder models dan mengimpor mereka
+
 fs.readdirSync(__dirname)
   .filter((file) => {
     return (

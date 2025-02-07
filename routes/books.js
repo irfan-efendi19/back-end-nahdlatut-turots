@@ -6,8 +6,9 @@ const {
   getBookById, 
   addBook, 
   deleteBook, 
-  updateBook, // Impor fitur updateBook
-  searchBooks // Impor fitur pencarian
+  updateBook, 
+  searchBooks,
+  getBookStats
 } = require("../controllers/bookController");
 
 // GET /books - Fetch all books
@@ -41,5 +42,7 @@ router.put(
 
 // DELETE /books/:id - Delete book by ID
 router.delete("/:id", deleteBook);
+
+router.get('/stats', getBookStats);
 
 module.exports = router;

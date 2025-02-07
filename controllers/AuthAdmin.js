@@ -5,18 +5,18 @@ const app = express();
 
 app.use(express.json());
 
-const { User } = require("../models");
+const { Admin } = require("../models");
 
 const Login = async (req, res) => {
   try {
     console.log("Request Body:", req.body);
-    const user = await User.findOne({
+    const admin = await Admin.findOne({
       where: {
         email: req.body.email,
       },
     });
 
-    const match = await bcrypt.compare(req.body.password, user.password);
+    const match = await bcrypt.compare(req.body.password, admin.password);
     if (!match) {
       return res.status(400).json({
         status: "fail",
@@ -24,25 +24,25 @@ const Login = async (req, res) => {
       });
     }
 
-    const userId = user.id;
-    const name = user.name;
-    const email = user.email;
+    const adminId = admin.id;
+    const name = admin.name;
+    const email = admin.email;
     const accessToken = jwt.sign(
-      { userId, name, email },
+      { adminId, name, email },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "20s" }
     );
     const refreshToken = jwt.sign(
-      { userId, name, email },
+      { adminId, name, email },
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "1d" }
     );
 
-    await User.update(
+    await Admin.update(
       { refresh_token: refreshToken },
       {
         where: {
-          id: userId,
+          id: adminId,
         },
       }
     );
@@ -66,20 +66,20 @@ const Logout = async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) return res.sendStatus(401);
 
-  const user = await User.findOne({
+  const admin = await Admin.findOne({
     where: {
       refresh_token: refreshToken,
     },
   });
 
-  if (!user) return res.sendStatus(204);
+  if (!admin) return res.sendStatus(204);
 
-  const userId = user.id;
-  await User.update(
+  const adminId = admin.id;
+  await Admin.update(
     { refresh_token: null },
     {
       where: {
-        id: userId,
+        id: adminId,
       },
     }
   );
@@ -93,24 +93,24 @@ const refreshToken = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) return res.sendStatus(401);
 
-    const user = await User.findOne({
+    const admin = await Admin.findOne({
       where: {
         refresh_token: refreshToken,
       },
     });
 
-    if (!user) return res.sendStatus(403);
+    if (!admin) return res.sendStatus(403);
 
     jwt.verify(
       refreshToken,
       process.env.REFRESH_TOKEN_SECRET,
       (err, decoded) => {
         if (err) return res.sendStatus(403);
-        const userId = user.id;
-        const name = user.name;
-        const email = user.email;
+        const adminId = admin.id;
+        const name = admin.name;
+        const email = admin.email;
         const accessToken = jwt.sign(
-          { userId, name, email },
+          { adminId, name, email },
           process.env.ACCESS_TOKEN_SECRET,
           {
             expiresIn: "15s",
@@ -138,13 +138,13 @@ const register = async (req, res) => {
     }
 
     // Check if the email already exists
-    const existingUser = await User.findOne({
+    const existingAdmin = await Admin.findOne({
       where: {
         email: email,
       },
     });
 
-    if (existingUser) {
+    if (existingAdmin) {
       return res.status(400).json({
         status: "fail",
         message: "email sudah digunakan",
@@ -155,17 +155,17 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create a new user
-    const newUser = await User.create({
+    const newAdmin = await Admin.create({
       email: email,
       password: hashedPassword,
       name: name,
     });
 
     // Create a token for the new user
-    const userId = newUser.id;
-    const uniqueTokenData = `${userId}-${Date.now()}`;
+    const adminId = newAdmin.id;
+    const uniqueTokenData = `${adminId}-${Date.now()}`;
     const accessToken = jwt.sign(
-      { userId, name, email },
+      { adminId, name, email },
       process.env.ACCESS_TOKEN_SECRET,
       {
         expiresIn: "20s",
@@ -173,11 +173,11 @@ const register = async (req, res) => {
     );
 
     // Save the unique token to the user record (or wherever appropriate in your app)
-    await User.update(
+    await Admin.update(
       { refresh_token: uniqueTokenData },
       {
         where: {
-          id: userId,
+          id: adminId,
         },
       }
     );
@@ -186,10 +186,10 @@ const register = async (req, res) => {
     res.status(201).json({
       status: "success",
       message: "Registrasi berhasil",
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
+      admin: {
+        id: newAdmin.id,
+        email: newAdmin.email,
+        name: newAdmin.name,
       },
       accessToken: accessToken,
     });

@@ -7,10 +7,27 @@ const getUsers = async (req, res) => {
     });
     res.json(users);
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-module.exports = {
-  getUsers,
+const getUserDetail = async (req, res) => {
+  try {
+    const user = await User.findOne({
+      where: { id: req.user.id }, // Gunakan ID dari token
+      attributes: ["id", "name", "email"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
 };
+
+module.exports = { getUsers, getUserDetail }; // Pastikan diekspor dengan benar!
