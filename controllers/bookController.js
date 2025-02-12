@@ -19,26 +19,26 @@ const bookSchema = {
 }
 
 
-// Helper function: Upload file to Google Cloud Storage
+// Upload GCS
 const uploadFileToBucket = async (file, folder) => {
   try {
     const bucket = storage.bucket(bucketName);
 
-    // Encode nama file untuk menghindari karakter khusus yang menyebabkan masalah
-    const encodedFileName = encodeURIComponent(file.originalname).replace(/%20/g, "+"); // Mengganti %20 dengan "+" untuk kompatibilitas
-    const fileName = `${folder}/${Date.now()}-${encodedFileName}`;
+    let sanitizedFileName = file.originalname.replace(/\+/g, "_").replace(/ /g, "");
+
+    sanitizedFileName = encodeURIComponent(sanitizedFileName);
+
+    const fileName = `${folder}/${Date.now()}-${sanitizedFileName}`;
     const blob = bucket.file(fileName);
 
-    // Membuat stream untuk mengunggah file
     const blobStream = blob.createWriteStream({
-      resumable: false, 
-      gzip: true, 
+      resumable: false,
+      gzip: true,
       metadata: {
-        contentType: file.mimetype, 
+        contentType: file.mimetype,
       },
     });
 
-    // Return promise untuk menyelesaikan upload
     return new Promise((resolve, reject) => {
       blobStream
         .on("finish", () => {
@@ -54,7 +54,6 @@ const uploadFileToBucket = async (file, folder) => {
     throw new Error(`Unexpected error during file upload: ${error.message}`);
   }
 };
-
 
 
 // GET /books - Fetch all books
@@ -110,6 +109,13 @@ const addBook = async (req, res) => {
     const pdfFile = req.files?.pdf?.[0];
     const thumbnailFile = req.files?.thumbnail?.[0];
 
+
+    const MAX_FILE_SIZE = 1 * 1024 * 1024;
+
+    if (thumbnailFile && thumbnailFile.size > MAX_FILE_SIZE) {
+    return res.status(400).json({ message: "ukuran gambar terlalu besar" });
+    }
+
     const pdfUrl = pdfFile
       ? await uploadFileToBucket(pdfFile, "pdfs") 
       : null;
@@ -135,7 +141,6 @@ const addBook = async (req, res) => {
 };
 
 
-// DELETE /books/:id - Delete book by ID
 const deleteBook = async (req, res) => {
   try {
     const book = await Book.findByPk(req.params.id);
@@ -143,37 +148,38 @@ const deleteBook = async (req, res) => {
       return res.status(404).json({ message: "Book not found" });
     }
 
-    const deletePromises = [];
+    const deleteFile = async (fileUrl, fileType) => {
+      if (!fileUrl) return;
 
-    if (book.pdf_url) {
-      const pdfPath = book.pdf_url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
-      if (pdfPath) {
-        deletePromises.push(
-          storage.bucket(bucketName).file(pdfPath).delete().catch((err) => {
-            console.error(`Failed to delete PDF: ${err.message}`);
-          })
-        );
+      try {
+        const filePath = decodeURIComponent(fileUrl.replace(`https://storage.googleapis.com/${bucketName}/`, ""));
+        const file = storage.bucket(bucketName).file(filePath);
+
+        const [exists] = await file.exists();
+        if (!exists) {
+          console.warn(`Warning: ${fileType} not found in storage (${filePath})`);
+          return;
+        }
+
+        await file.delete();
+        console.log(`${fileType} deleted successfully: ${filePath}`);
+      } catch (err) {
+        console.error(`Failed to delete ${fileType}: ${err.message}`);
       }
-    }
+    };
 
-    if (book.thumbnail_url) {
-      const thumbnailPath = book.thumbnail_url.replace(`https://storage.googleapis.com/${bucketName}/`, '');
-      if (thumbnailPath) {
-        deletePromises.push(
-          storage.bucket(bucketName).file(thumbnailPath).delete().catch((err) => {
-            console.error(`Failed to delete thumbnail: ${err.message}`);
-          })
-        );
-      }
-    }
+    // Hapus PDF dan Thumbnail jika ada
+    await Promise.all([
+      deleteFile(book.pdf_url, "PDF"),
+      deleteFile(book.thumbnail_url, "Thumbnail")
+    ]);
 
-    await Promise.all(deletePromises);
-
-    // Hapus buku dari database setelah file berhasil dihapus
+    // Hapus data buku dari database
     await book.destroy();
 
     res.status(200).json({ message: "Book deleted successfully" });
   } catch (err) {
+    console.error(`Error deleting book: ${err.message}`);
     res.status(500).json({ message: "Error deleting book", error: err.message });
   }
 };
@@ -188,9 +194,10 @@ const updateBook = async (req, res) => {
       return res.status(404).json({ message: "Book not found" });
     }
 
+    // Validasi input menggunakan schema
     const validation = v.validate(req.body, bookSchema);
     if (validation !== true) {
-      return res.status(400).json({ message: "Validation failed", errors: validation });
+      return res.status(400).json({ message: "Validation failed", errors: validation.errors });
     }
 
     const { title, author, published_year, genre, pages, description } = req.body;
@@ -200,27 +207,52 @@ const updateBook = async (req, res) => {
     let pdfUrl = book.pdf_url;
     let thumbnailUrl = book.thumbnail_url;
 
+    // Fungsi untuk menghapus file lama dari storage
+    const deleteFile = async (fileUrl, fileType) => {
+      if (!fileUrl) return;
+
+      try {
+        const filePath = decodeURIComponent(fileUrl.replace(`https://storage.googleapis.com/${bucketName}/`, ""));
+        const file = storage.bucket(bucketName).file(filePath);
+
+        const [exists] = await file.exists();
+        if (!exists) {
+          console.warn(`Warning: ${fileType} not found in storage (${filePath})`);
+          return;
+        }
+
+        await file.delete();
+        console.log(`${fileType} deleted successfully: ${filePath}`);
+      } catch (err) {
+        console.error(`Failed to delete ${fileType}: ${err.message}`);
+      }
+    };
+
     const deletePromises = [];
 
     if (pdfFile) {
-      if (pdfUrl) {
-        const oldPdfPath = pdfUrl.replace(`https://storage.googleapis.com/${bucketName}/`, '');
-        deletePromises.push(storage.bucket(bucketName).file(oldPdfPath).delete().catch(err => console.error("Failed to delete old PDF:", err.message)));
-      }
-      pdfUrl = await uploadFileToBucket(pdfFile, "pdfs");
+      deletePromises.push(deleteFile(pdfUrl, "PDF"));
     }
-
     if (thumbnailFile) {
-      if (thumbnailUrl) {
-        const oldThumbnailPath = thumbnailUrl.replace(`https://storage.googleapis.com/${bucketName}/`, '');
-        deletePromises.push(storage.bucket(bucketName).file(oldThumbnailPath).delete().catch(err => console.error("Failed to delete old Thumbnail:", err.message)));
-      }
-      thumbnailUrl = await uploadFileToBucket(thumbnailFile, "thumbnails");
+      deletePromises.push(deleteFile(thumbnailUrl, "Thumbnail"));
     }
 
-    // Tunggu semua file lama terhapus sebelum update database
+    // Tunggu penghapusan selesai sebelum mengunggah file baru
     await Promise.all(deletePromises);
 
+    // Unggah file baru jika ada
+    try {
+      if (pdfFile) {
+        pdfUrl = await uploadFileToBucket(pdfFile, "pdfs");
+      }
+      if (thumbnailFile) {
+        thumbnailUrl = await uploadFileToBucket(thumbnailFile, "thumbnails");
+      }
+    } catch (uploadError) {
+      return res.status(500).json({ message: "Error uploading file", error: uploadError.message });
+    }
+
+    // Update data buku
     await book.update({
       title: title || book.title,
       author: author || book.author,
@@ -234,6 +266,7 @@ const updateBook = async (req, res) => {
 
     res.status(200).json({ message: "Book updated successfully", book });
   } catch (err) {
+    console.error(`Error updating book: ${err.message}`);
     res.status(500).json({ message: "Error updating book", error: err.message });
   }
 };

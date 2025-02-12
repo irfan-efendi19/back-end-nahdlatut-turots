@@ -11,7 +11,6 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Middleware untuk upload file
 const upload = multer({ storage, fileFilter });
 
 module.exports = upload;
