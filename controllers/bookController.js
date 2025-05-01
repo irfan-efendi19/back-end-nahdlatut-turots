@@ -273,30 +273,31 @@ const updateBook = async (req, res) => {
 
 
 // GET /books/search - Search books by keyword
-async function searchBooks() {
-  const query = document.getElementById('searchInput').value.trim();
-  if (!query) {
-    loadBooks();
-    return;
-  }
-
+const searchBooks = async (req, res) => {
   try {
-    const response = await fetch(`/books/search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) throw new Error('Failed to search for books');
-
-    // Check if the response is JSON
-    const contentType = response.headers.get('Content-Type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Expected JSON response, but received: ' + contentType);
+    const { q } = req.query; // Ambil query parameter `q`
+    if (!q) {
+      return res.status(400).json({ message: "Masukkan kata kunci" });
     }
-
-    const books = await response.json();
-    renderBooksTable(books);
-  } catch (error) {
-    showToast('Error', 'Error searching books: ' + error.message, 'danger');
+    // Cari kitab berdasarkan kata kunci pada kolom `title`, `author`, atau `description`
+    const books = await Book.findAll({
+      where: {
+        [Op.or]: [
+          { title: { [Op.like]: `%${q}%` } },
+          { author: { [Op.like]: `%${q}%` } },
+          { description: { [Op.like]: `%${q}%` } },
+        ],
+      },
+    });
+    // Jika tidak ada hasil, kembalikan pesan
+    if (books.length === 0) {
+      return res.status(404).json({ message: "Tidak ada kitab" });
+    }
+    res.status(200).json(books);
+  } catch (err) {
+    res.status(500).json({ message: "Error saat mencari kitab ", error: err.message });
   }
-}
-
+};
 
 // Tambahkan fungsi ini untuk mendapatkan statistik jumlah kitab
 const getBookStats = async (req, res) => {

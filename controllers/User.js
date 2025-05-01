@@ -15,7 +15,7 @@ const getUsers = async (req, res) => {
 const getUserDetail = async (req, res) => {
   try {
     const user = await User.findOne({
-      where: { id: req.user.id }, // Gunakan ID dari token
+      where: { id: req.user.id }, 
       attributes: ["id", "name", "email"],
     });
 
@@ -30,4 +30,4 @@ const getUserDetail = async (req, res) => {
   }
 };
 
-module.exports = { getUsers, getUserDetail }; // Pastikan diekspor dengan benar!
+module.exports = { getUsers, getUserDetail }; 

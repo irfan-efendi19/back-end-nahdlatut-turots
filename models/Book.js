@@ -42,9 +42,9 @@ module.exports = (sequelize, DataTypes) => {
       },
     },
     {
-      tableName: "books", // Nama tabel di database
-      timestamps: true, // Aktifkan createdAt dan updatedAt
-      underscored: true, // Gunakan format snake_case untuk kolom
+      tableName: "books", 
+      timestamps: true, 
+      underscored: true, 
     }
   );
 

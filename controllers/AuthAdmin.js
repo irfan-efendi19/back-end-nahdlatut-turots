@@ -12,7 +12,7 @@ const Login = async (req, res) => {
     console.log("Request Body:", req.body);
     const admin = await Admin.findOne({
       where: {
-        email: req.body.email,
+        username: req.body.username,
       },
     });
 
@@ -26,14 +26,14 @@ const Login = async (req, res) => {
 
     const adminId = admin.id;
     const name = admin.name;
-    const email = admin.email;
+    const username = admin.username;
     const accessToken = jwt.sign(
-      { adminId, name, email },
+      { adminId, name, username },
       process.env.ACCESS_TOKEN_SECRET,
       { expiresIn: "20s" }
     );
     const refreshToken = jwt.sign(
-      { adminId, name, email },
+      { adminId, name, username },
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "1d" }
     );
@@ -108,9 +108,9 @@ const refreshToken = async (req, res) => {
         if (err) return res.sendStatus(403);
         const adminId = admin.id;
         const name = admin.name;
-        const email = admin.email;
+        const username = admin.username;
         const accessToken = jwt.sign(
-          { adminId, name, email },
+          { adminId, name, username },
           process.env.ACCESS_TOKEN_SECRET,
           {
             expiresIn: "15s",
@@ -127,27 +127,26 @@ const refreshToken = async (req, res) => {
 const register = async (req, res) => {
   try {
     console.log("Request Body:", req.body);
-    const { email, password, name } = req.body;
+    const { username, password, name } = req.body;
 
     // Check if the request body contains the necessary fields
-    if (!email || !password || !name) {
+    if (!username || !password || !name) {
       return res.status(400).json({
         status: "fail",
         message: "Mohon lengkapi semua field",
       });
     }
 
-    // Check if the email already exists
     const existingAdmin = await Admin.findOne({
       where: {
-        email: email,
+        username: username,
       },
     });
 
     if (existingAdmin) {
       return res.status(400).json({
         status: "fail",
-        message: "email sudah digunakan",
+        message: "akun sudah digunakan",
       });
     }
 
@@ -156,7 +155,7 @@ const register = async (req, res) => {
 
     // Create a new user
     const newAdmin = await Admin.create({
-      email: email,
+      username: username,
       password: hashedPassword,
       name: name,
     });
@@ -165,7 +164,7 @@ const register = async (req, res) => {
     const adminId = newAdmin.id;
     const uniqueTokenData = `${adminId}-${Date.now()}`;
     const accessToken = jwt.sign(
-      { adminId, name, email },
+      { adminId, name, username },
       process.env.ACCESS_TOKEN_SECRET,
       {
         expiresIn: "20s",
@@ -188,7 +187,7 @@ const register = async (req, res) => {
       message: "Registrasi berhasil",
       admin: {
         id: newAdmin.id,
-        email: newAdmin.email,
+        username: newAdmin.username,
         name: newAdmin.name,
       },
       accessToken: accessToken,
